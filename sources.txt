@@ -1,14 +1,8 @@
 {
   "files": [
-    "videos/clip01.mp4",
-    "videos/clip02.mp4",
-    "videos/clip03.mp4",
-    "videos/clip04.mp4"
+    "videos/clip01.mp4"
   ],
   "routes": [
-    "https://www.youtube.com/watch?v=es4x5R-rV9s",
-    "https://www.youtube.com/watch?v=es4x5R-r123s",
-    "https://www.youtube.com/watch?v=es4x5R-123s",
-    "https://www.youtube.com/watch?v=es4x5R-333s"
+    "https://www.youtube.com/watch?v=a-8XiE7W7u4"
   ]
 }

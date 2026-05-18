@@ -6,6 +6,7 @@ import logging
 import math
 import shutil
 from pathlib import Path
+import json
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -152,6 +153,7 @@ class MinerPipeline:
                 if len(records) >= self.sample_count:
                     break
                 start = float(idx) * CLIP_DURATION_SEC
+                logger.info("processing source_id=%s segment=%d/%d start=%.3f", source_id, idx + 1, total_segments, start)
 
                 # Within-dataset overlap protection.
                 positions = seen_positions.setdefault(canonical, [])
@@ -174,6 +176,142 @@ class MinerPipeline:
                         exc,
                     )
                     continue
+
+    async def run_upload(
+        self,
+        *,
+        sources_file: Path,
+        netuid: int,
+        miner_hotkey: str,
+        interval_id: int,
+        workdir: Path,
+    ) -> tuple[Path, Path]:
+        if interval_id < 1:
+            raise ValueError("interval_id must be >= 1")
+        logger.info(
+            "miner pipeline start interval_id=%d hotkey=%s sample_count=%d",
+            interval_id,
+            miner_hotkey,
+            self.sample_count,
+        )
+
+        workdir.mkdir(parents=True, exist_ok=True)
+        out_dir = workdir / "out" / str(interval_id)
+        if out_dir.exists():
+            shutil.rmtree(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        records: list[ClipRecord] = []
+        assets_to_upload: dict[str, Path] = {}
+
+        frames_dir = Path(".nexis/miner/frames")
+        info_dir = Path(".nexis/miner/info")
+        clips_dir = Path(".nexis/miner/clips")
+
+        # Directory to move processed files
+        uploaded_dir = Path(".nexis/miner/uploaded") / str(interval_id)
+        uploaded_frames_dir = uploaded_dir / "frames"
+        uploaded_info_dir = uploaded_dir / "info"
+        uploaded_clips_dir = uploaded_dir / "clips"
+
+        uploaded_frames_dir.mkdir(parents=True, exist_ok=True)
+        uploaded_info_dir.mkdir(parents=True, exist_ok=True)
+        uploaded_clips_dir.mkdir(parents=True, exist_ok=True)
+
+        frame_files = [f for f in frames_dir.iterdir() if f.is_file() and f.suffix.lower() == ".jpg"]
+        
+        if len(frame_files) < self.sample_count:
+            raise RuntimeError(
+                f"file counts is small than {self.sample_count}."
+            )
+        for frame_path in frame_files:
+            if len(records) >= self.sample_count:
+                break
+            json_path = info_dir / f"{frame_path.stem}.json"
+            clip_name = f"{frame_path.stem}.mp4"
+            clip_path = clips_dir / clip_name
+
+            if not json_path.exists() or not clip_path.exists():
+                continue
+
+            # Load existing JSON
+            try:
+                with json_path.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse JSON: %s", json_path)
+                continue
+
+            caption = data["caption"]
+            clip_id = data["ClipID"]
+            ClipName = data["ClipName"]
+            source_id = data["SourceID"]
+            start = data["StartSec"]
+            canonical = data["RepoURL"]
+
+            record = ClipRecord(
+                clip_id=clip_id,
+                clip_uri=f"clips/{ClipName}",
+                clip_sha256=sha256_file(clip_path),
+                first_frame_uri=f"frames/{frame_path.name}",
+                first_frame_sha256=sha256_file(frame_path),
+                source_video_id=source_id,
+                clip_start_sec=start,
+                duration_sec=CLIP_DURATION_SEC,
+                caption=caption,
+                width=TARGET_WIDTH,
+                height=TARGET_HEIGHT,
+                fps=float(TARGET_FPS),
+                num_frames=TARGET_NUM_FRAMES,
+                source_video_url=canonical,
+            )
+            records.append(record)
+            
+
+            # Move processed files to uploaded directory
+            shutil.move(str(frame_path), uploaded_frames_dir / frame_path.name)
+            shutil.move(str(clip_path), uploaded_clips_dir / clip_path.name)
+            shutil.move(str(json_path), uploaded_info_dir / json_path.name)
+
+            assets_to_upload[record.clip_uri] = uploaded_clips_dir / clip_path.name
+            assets_to_upload[record.first_frame_uri] = uploaded_frames_dir / frame_path.name
+
+        if len(records) != self.sample_count:
+            raise RuntimeError(
+                f"failed to produce {self.sample_count} samples from sources "
+                f"(got {len(records)}); add more local videos or URLs to {sources_file}"
+            )
+
+        dataset_path = out_dir / "dataset.parquet"
+        write_dataset_parquet(records, dataset_path)
+        logger.info("dataset written interval=%d records=%d", interval_id, len(records))
+
+        manifest = IntervalManifest(
+            protocol_version=PROTOCOL_VERSION,
+            schema_version=SCHEMA_VERSION,
+            spec_id=self.spec_id,
+            netuid=netuid,
+            miner_hotkey=miner_hotkey,
+            interval_id=interval_id,
+            record_count=len(records),
+            dataset_sha256=sha256_file(dataset_path),
+        )
+        manifest_path = out_dir / "manifest.json"
+        write_manifest(manifest, manifest_path)
+
+        base_key = f"{interval_id}"
+        await self.store.upload_file(f"{base_key}/dataset.parquet", dataset_path, use_write=True)
+        for relative_uri, local_path in assets_to_upload.items():
+            await self.store.upload_file(
+                f"{base_key}/{relative_uri.lstrip('/')}",
+                local_path,
+                use_write=True,
+            )
+        # Manifest last: signals the upload is complete.
+        await self.store.upload_file(f"{base_key}/manifest.json", manifest_path, use_write=True)
+        logger.info("uploaded interval package hotkey=%s interval=%d", miner_hotkey, interval_id)
+
+        return dataset_path, manifest_path
 
     async def run_interval(
         self,
@@ -264,15 +402,6 @@ class MinerPipeline:
                     self.source_provider.create_clip(raw_path, clip_path, start)
                     self.source_provider.extract_first_frame(clip_path, frame_path)
 
-                    # I need to save information about the clip's information to text file that named with clip_id.
-                    with open(out_dir / f"{clip_id}.txt", "w") as f:
-                        f.write(f"source_id: {source_id}\n")
-                        f.write(f"canonical_url: {canonical}\n")
-                        f.write(f"start_sec: {start}\n")
-                        f.write(f"duration_sec: {CLIP_DURATION_SEC}\n")
-                        f.write(f"src_width: {src_width}\n")
-                        f.write(f"src_height: {src_height}\n")
-                        
                 except Exception as exc:
                     logger.warning(
                         "clip extraction failed source_id=%s start=%.3f err=%s",

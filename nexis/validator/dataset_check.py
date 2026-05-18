@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from ..hash_utils import sha256_file
-from ..miner.youtube import probe_video
+from ..miner.youtube_1 import probe_video
 from ..models import ClipRecord, IntervalManifest
 from ..protocol import (
     CLIP_DURATION_SEC,

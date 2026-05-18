@@ -7,7 +7,7 @@ from typing import Any, Protocol
 import json
 from urllib.parse import parse_qs, urlparse
 
-from .youtube import (
+from .youtube_1 import (
     VIDEO_EXTENSIONS,
     create_clip,
     download_source_video,
@@ -80,6 +80,7 @@ class GenericSourceProvider:
         extract_first_frame(src, dst)
 
     def create_info(self, src: Path, clip_name: str, frame_name: str, frame_path: Path, info_path: Path, start_sec: float, clip_id: str, source_id: str, repo_url: str) -> None:
+        info_path.parent.mkdir(parents=True, exist_ok=True)
         info_path.write_text(json.dumps({
             "ClipPath": str(src),
             "ClipName": clip_name,

@@ -88,7 +88,6 @@ class Captioner:
             return ""
         data_url = f"data:image/jpeg;base64,{_b64_image(frame_path)}"
         last_exc: Exception | None = None
-        # for attempt in range(1, max(1, self.max_retries) + 1):
         try:
             resp = self._client.chat.completions.create(
                 model=self.model,
@@ -104,26 +103,10 @@ class Captioner:
                 max_tokens=80,
             )
             text = (resp.choices[0].message.content or "").strip()
-            logger.warning("Returned Result From GPT:%s -- %s", text, frame_path)
-            if self.delay_sec > 0:
-                time.sleep(self.delay_sec)
+            logger.info("Returned Result From GPT:%s -- %s", text, frame_path)
+            # Removed the delay
             return text[:300]
         except Exception as exc:
             last_exc = exc
-            # if _is_rate_limit_error(exc) and attempt < self.max_retries:
-            #     wait = rate_limit_wait_sec(exc, tpm_cooldown_sec=self.tpm_cooldown_sec)
-            #     logger.warning(
-            #         "caption rate limited frame=%s attempt=%d/%d sleeping=%.1fs",
-            #         frame_path,
-            #         attempt,
-            #         self.max_retries,
-            #         wait,
-            #     )
-            #     time.sleep(wait)
-                # continue
-            logger.warning("caption call failed frame=%s err=%s", frame_path, exc)
+            logger.error("caption call failed frame=%s err=%s", frame_path, exc)
             return ""
-        # logger.warning(
-        #     "caption call exhausted retries frame=%s err=%s", frame_path, last_exc
-        # )
-        return ""

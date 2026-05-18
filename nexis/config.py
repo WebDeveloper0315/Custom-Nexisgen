@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     r2_write_access_key: str = Field(default="", alias="R2_WRITE_ACCESS_KEY")
     r2_write_secret_key: str = Field(default="", alias="R2_WRITE_SECRET_KEY")
 
-    sources_file: Path = Field(default=Path("sources.json"), alias="NEXIS_SOURCES_FILE")
+    sources_file: Path = Field(default=Path("sources.txt"), alias="NEXIS_SOURCES_FILE")
     # Optional: auto-include every video under this directory (in addition to sources_file).
     local_sources_dir: Path | None = Field(default=None, alias="NEXIS_LOCAL_SOURCES_DIR")
     workdir: Path = Field(default=Path(".nexis"), alias="NEXIS_WORKDIR")

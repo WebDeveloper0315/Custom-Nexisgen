@@ -335,84 +335,54 @@ def probe_video(path: Path) -> dict:
 
 
 def create_clip(src: Path, dst: Path, start_sec: float) -> None:
-    """Create a clip re-encoded to the strict spec (1280x704, 24fps, 121 frames, no audio).
-
-    Uses a two-stage seek for Ubuntu/Linux:
-    - First seek (before -i): fast coarse seek to nearest keyframe
-    - Second seek (after -i): accurate fractional seek
-    """
+    """Create a clip re-encoded to the strict spec (1280x704, 24fps, 121 frames, no audio)."""
     dst.parent.mkdir(parents=True, exist_ok=True)
 
-    # Split seek into coarse + fine for better speed/accuracy balance
+    # Crop-to-fit then scale to TARGET_WIDTH x TARGET_HEIGHT to preserve aspect on most sources.
+
     coarse_sec = int(start_sec)
     fine_sec = start_sec - coarse_sec
 
-    # Crop-to-fit then scale to TARGET_WIDTH x TARGET_HEIGHT
+
     vf = (
         f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,"
         f"crop={TARGET_WIDTH}:{TARGET_HEIGHT},"
         f"fps={TARGET_FPS}"
     )
-
     cmd = [
         "ffmpeg",
         "-hide_banner",
         "-loglevel",
         "error",
         "-y",
-
-        # Fast coarse seek (keyframe-based)
         "-ss",
-        str(coarse_sec),
-
-        # Input
+        f"{coarse_sec:d}",
         "-i",
         str(src),
-
-        # Accurate fine seek
         "-ss",
         f"{fine_sec:.3f}",
-
-        # Optional timestamp fixes for Linux/VFR edge cases
-        "-avoid_negative_ts",
-        "make_zero",
-        "-fflags",
-        "+genpts",
-
-        # Output frames
         "-frames:v",
         str(TARGET_NUM_FRAMES),
-
-        # Video filters
         "-vf",
         vf,
-
-        # No audio
         "-an",
-
-        # Encoding
         "-c:v",
         "libx264",
         "-pix_fmt",
         "yuv420p",
         "-preset",
-        "veryfast",   # can use ultrafast for more speed
+        "veryfast",
         "-crf",
         "20",
-
         str(dst),
     ]
-
     logger.debug(
-        "ffmpeg create clip src=%s dst=%s start=%.3f coarse=%d fine=%.3f frames=%d",
+        "ffmpeg create clip src=%s dst=%s start=%.3f frames=%d",
         src,
         dst,
         start_sec,
-        coarse_sec,
-        fine_sec,
         TARGET_NUM_FRAMES,
     )
-
     _run_command(cmd, timeout_sec=FFMPEG_TIMEOUT_SEC)
 
 
@@ -444,5 +414,5 @@ def get_video_duration_sec(path: Path) -> float:
     except (TypeError, ValueError):
         return 0.0
 
-
 _ = (CLIP_DURATION_SEC, os)  # quiet unused import warnings; CLIP_DURATION_SEC kept for callers
+

@@ -19,6 +19,7 @@ from typing import Any, TYPE_CHECKING
 import typer
 from rich.console import Console
 from rich.logging import RichHandler
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from nexis.chain.metagraph import (
     _open_subtensor,
@@ -251,13 +252,93 @@ def commit_credentials() -> None:
     logger.info("credentials committed for hotkey=%s", hotkey_ss58)
     console.print(f"read credentials committed: {commitment}")
 
+#===========================================
+#desc: get caption.
+#date: 2024-06-17
+#
+@app.command("caption")
+def caption(
+    debug: bool = typer.Option(False, "--debug", help="Enable verbose debug logging."),
+) -> None:
+    MAX_WORKERS = 5  # Number of parallel caption requests
+    settings = load_settings()
+    _configure_logging(settings.log_level)
+    captioner = _build_captioner(settings)
+    
+    if not captioner.enabled:
+        logger.warning(
+            "captioning disabled: no OPENAI_API_KEY or GEMINI_API_KEY set; "
+            "miners will produce empty captions and trainer will fall back to "
+            "NEXIS_TRAINER_DEFAULT_PROMPT for every clip"
+        )
+        return
+
+    logger.info(
+        "Captioning in parallel, max_workers=%d", MAX_WORKERS
+    )
+
+    frames_dir = Path(".nexis/miner/frames")
+    info_dir = Path(".nexis/miner/info")
+    frame_files = [f for f in frames_dir.iterdir() if f.is_file() and f.suffix.lower() == ".jpg"]
+
+    def process_frame(frame_path: Path):
+        json_path = info_dir / f"{frame_path.stem}.json"
+        if not json_path.exists():
+            if debug:
+                logger.warning("JSON file not found for frame: %s", frame_path)
+            return
+
+        # Load existing JSON
+        try:
+            with json_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse JSON: %s", json_path)
+            return
+
+        # Skip if caption already exists
+        if "caption" in data and data["caption"].strip():
+            if debug:
+                logger.info("Skipping %s, caption already exists", frame_path.name)
+            return
+
+        # Generate caption
+        caption_text = captioner.caption_frame(frame_path)
+        if debug:
+            logger.info("Caption for %s: %s", frame_path.name, caption_text)
+
+        # Update JSON
+        data["caption"] = caption_text
+
+        # Save JSON back
+        with json_path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        if debug:
+            logger.info("Updated JSON saved: %s", json_path)
+
+    # Run all frames in parallel
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(process_frame, f) for f in frame_files]
+        for future in as_completed(futures):
+            # Optional: handle exceptions
+            try:
+                future.result()
+            except Exception as exc:
+                logger.warning("Frame processing failed: %s", exc)
+
+#===========================================
+#desc: split video, extract frames, create info json.
+#date: 2024-06-17
+#
+
 @app.command("split")
 def split(
     debug: bool = typer.Option(False, "--debug", help="Enable verbose debug logging."),
 ) -> None:
     settings = load_settings()
     _configure_logging(settings.log_level)
-    console.print("split command not implemented yet")
+    console.print("*************************split command************************")
     hotkey_ss58 = _resolve_hotkey_ss58_from_wallet(settings)
     _configure_logging("INFO", debug=debug)
     creds = _build_miner_credentials(settings, hotkey=hotkey_ss58)
@@ -307,6 +388,60 @@ def split(
         console.print("miner loop stopped")
 
 
+# -------------- upload --------------
+
+
+@app.command("upload")
+def upload(
+    debug: bool = typer.Option(False, "--debug", help="Enable verbose debug logging."),
+) -> None:
+    settings = load_settings()
+    hotkey_ss58 = _resolve_hotkey_ss58_from_wallet(settings)
+    _configure_logging("INFO", debug=debug)
+    creds = _build_miner_credentials(settings, hotkey=hotkey_ss58)
+    creds.validate_account_id()
+    creds.validate_read_key_lengths()
+    creds.validate_bucket_name()
+    creds.validate_bucket_for_hotkey(hotkey_ss58)
+    store = R2S3Store(creds)
+    captioner = _build_captioner(settings)
+    if not captioner.enabled:
+        logger.warning(
+            "captioning disabled: no OPENAI_API_KEY or GEMINI_API_KEY set; "
+            "miners will produce empty captions and trainer will fall back to "
+            "NEXIS_TRAINER_DEFAULT_PROMPT for every clip"
+        )
+    else:
+        logger.info(
+            "caption pacing delay_sec=%.1f max_retries=%d tpm_cooldown_sec=%.1f",
+            captioner.delay_sec,
+            captioner.max_retries,
+            captioner.tpm_cooldown_sec,
+        )
+    if settings.local_sources_dir is not None:
+        source_provider = LocalSourceProvider(
+            sources_dir=settings.local_sources_dir,
+            sources_file=settings.sources_file,
+        )
+        logger.info("miner using local videos only dir=%s", settings.local_sources_dir)
+    else:
+        source_provider = GenericSourceProvider()
+    pipeline = MinerPipeline(
+        store=store,
+        captioner=captioner,
+        source_provider=source_provider,
+    )
+    try:
+        asyncio.run(
+            _run_upload_loop(
+                settings=settings,
+                store=store,
+                pipeline=pipeline,
+                hotkey_ss58=hotkey_ss58,
+            )
+        )
+    except KeyboardInterrupt:
+        console.print("miner loop stopped")
 
 # -------------- mine --------------
 
@@ -389,6 +524,44 @@ async def _run_split_loop(
     except Exception as exc:
         logger.exception("miner iteration failed: %s", exc)
     await _sleep_poll(settings.miner_loop_sleep_sec)
+
+
+async def _run_upload_loop(
+    *,
+    settings: Settings,
+    store: R2S3Store,
+    pipeline: MinerPipeline,
+    hotkey_ss58: str,
+) -> None:
+    console.print(f"upload loop started: sleep_sec={settings.miner_loop_sleep_sec}")
+    while True:
+        try:
+            existing = await list_miner_interval_ids(store)
+            next_interval_id = (max(existing) + 1) if existing else 1
+            console.print(f"uploading interval_id={next_interval_id}")
+
+            dataset_path, manifest_path = await pipeline.run_upload(
+                sources_file=settings.sources_file,
+                netuid=settings.netuid,
+                miner_hotkey=hotkey_ss58,
+                interval_id=next_interval_id,
+                workdir=settings.workdir / "miner",
+            )
+
+            console.print(
+                f"mined interval={next_interval_id} "
+                f"dataset={dataset_path} manifest={manifest_path}"
+            )
+
+        except RuntimeError as exc:
+            print("finished.")
+            break  # Exit the loop immediately
+
+        except Exception as exc:
+            logger.exception("miner iteration failed: %s", exc)
+            # continue looping after other exceptions
+
+        await _sleep_poll(settings.miner_loop_sleep_sec)
 
 
 async def _run_miner_loop(

@@ -49,3 +49,6 @@ models/*
 !models/.gitkeep
 config.json.bak
 model_download_summary.json
+
+videos/*
+.nexis

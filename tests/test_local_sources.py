@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from nexis.miner.youtube import read_local_sources, read_sources, resolve_local_source
+from nexis.miner.youtube_1 import read_local_sources, read_sources, resolve_local_source
 
 
 def test_resolve_local_source_relative(tmp_path: Path) -> None:
@@ -14,7 +14,7 @@ def test_resolve_local_source_relative(tmp_path: Path) -> None:
 def test_read_sources_mixed(tmp_path: Path) -> None:
     video = tmp_path / "a.mp4"
     video.write_bytes(b"fake")
-    sources = tmp_path / "sources.json"
+    sources = tmp_path / "sources.txt"
     sources.write_text(
         json.dumps(
             {
@@ -32,7 +32,7 @@ def test_read_sources_mixed(tmp_path: Path) -> None:
 def test_read_local_sources_skips_urls(tmp_path: Path) -> None:
     video = tmp_path / "a.mp4"
     video.write_bytes(b"fake")
-    sources = tmp_path / "sources.json"
+    sources = tmp_path / "sources.txt"
     sources.write_text(
         json.dumps(
             {
@@ -52,7 +52,7 @@ def test_read_sources_extra_dir(tmp_path: Path) -> None:
     (sub / "one.mp4").write_bytes(b"1")
     (sub / "two.mkv").write_bytes(b"2")
     (sub / "readme.txt").write_text("skip", encoding="utf-8")
-    sources = tmp_path / "sources.json"
+    sources = tmp_path / "sources.txt"
     sources.write_text(json.dumps({"files": [], "routes": []}), encoding="utf-8")
     file_entries, route_entries = read_sources(sources, extra_dir=sub)
     assert route_entries == []
