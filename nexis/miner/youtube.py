@@ -362,8 +362,8 @@ def create_clip(src: Path, dst: Path, start_sec: float) -> None:
         "-y",
 
         # Fast coarse seek (keyframe-based)
-        "-ss",
-        str(coarse_sec),
+        # "-ss",
+        # str(coarse_sec),
 
         # Input
         "-i",
@@ -371,7 +371,7 @@ def create_clip(src: Path, dst: Path, start_sec: float) -> None:
 
         # Accurate fine seek
         "-ss",
-        f"{fine_sec:.3f}",
+        f"{start_sec:.3f}",
 
         # Optional timestamp fixes for Linux/VFR edge cases
         "-avoid_negative_ts",

@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>StatisticsForm</class>
+ <widget class="QDialog" name="StatisticsForm">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>420</width>
+    <height>484</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Statistics</string>
+  </property>
+  <widget class="QLabel" name="total_label">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>20</y>
+     <width>380</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>11</pointsize>
+     <weight>75</weight>
+     <bold>true</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>Total Clips: 0</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="matching_label">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>50</y>
+     <width>380</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>11</pointsize>
+     <weight>75</weight>
+     <bold>true</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>Matching filter: 0</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="filter_hint_label">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>78</y>
+     <width>371</width>
+     <height>51</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Check categories to filter counts (OR within group, AND across groups)</string>
+   </property>
+   <property name="wordWrap">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QGroupBox" name="env_group">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>125</y>
+     <width>380</width>
+     <height>110</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Environment</string>
+   </property>
+   <widget class="QCheckBox" name="water_check">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>30</y>
+      <width>120</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>water</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="land_check">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>55</y>
+      <width>120</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>land</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="sea_check">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>80</y>
+      <width>120</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>sea</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QGroupBox" name="season_group">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>245</y>
+     <width>380</width>
+     <height>90</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Season</string>
+   </property>
+   <widget class="QCheckBox" name="summer_check">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>30</y>
+      <width>120</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>summer</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="winter_check">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>55</y>
+      <width>120</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>winter</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QGroupBox" name="place_group">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>345</y>
+     <width>380</width>
+     <height>90</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Place</string>
+   </property>
+   <widget class="QCheckBox" name="city_check">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>30</y>
+      <width>120</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>city</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="nature_check">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>55</y>
+      <width>120</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>nature</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QPushButton" name="close_btn">
+   <property name="geometry">
+    <rect>
+     <x>160</x>
+     <y>450</y>
+     <width>100</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Close</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
